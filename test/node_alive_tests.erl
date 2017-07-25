@@ -15,24 +15,24 @@ basic_test_() ->
         end},
        {"node_dead",
         fun() ->
-                timer:sleep(1000),
-                ?assertEqual(<<"1">>, element(2, eredis_pool:q([<<"ZCARD">>, <<"$node_alive_heartbeat_test">>]))),
+                timer:sleep(500),
+                ?assertEqual(1, length(element(2, node_alive:get_nodes()))),
                 Now = erlang:system_time(seconds),
+                {ok, Ref} = node_alive:get_ref(),
                 LiveTime = integer_to_binary(Now),
                 DeadTime = integer_to_binary(Now - 21),
                 {ok, _} = eredis_pool:q([<<"ZADD">>, <<"$node_alive_heartbeat_test">>, LiveTime, <<"101">>]),
                 {ok, _} = eredis_pool:q([<<"ZADD">>, <<"$node_alive_heartbeat_test">>, DeadTime, <<"102">>]),
-                ?assertEqual(<<"3">>, element(2, eredis_pool:q([<<"ZCARD">>, <<"$node_alive_heartbeat_test">>]))),
-                timer:sleep(2000),
-                ?assertEqual(<<"2">>, element(2, eredis_pool:q([<<"ZCARD">>, <<"$node_alive_heartbeat_test">>]))),
-                ?assertEqual(<<"1">>, element(2, eredis_pool:q([<<"LLEN">>, <<"$node_alive_over_test_101">>])))
+                timer:sleep(1000),
+                ?assertNotEqual(Ref, element(2, node_alive:get_ref())),
+                ?assertEqual(2, length(element(2, node_alive:get_nodes())))
         end},
        {"clean",
         fun() ->
                 {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_heartbeat_test">>]),
-                {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_master_test">>]),
+                {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_ref_test">>]),
+                {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_over_test_100">>]),
                 {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_over_test_101">>]),
-                {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_over_test_102">>]),
                 {ok, _} = eredis_pool:q([<<"DEL">>, <<"$node_alive_over_test_102">>])
         end}
       ]}

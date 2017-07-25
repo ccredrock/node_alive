@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(node_alive_sup).
 
--export([start_link/0, start_link/1]).
+-export([start_link/0]).
 -export([init/1]).
 
 %%------------------------------------------------------------------------------
@@ -16,13 +16,9 @@
 
 %%------------------------------------------------------------------------------
 start_link() ->
-    Props = proplists:delete(included_applications, application:get_all_env(node_alive)),
-    start_link(Props).
-
-start_link(Props) ->
     {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
     {ok, _} = supervisor:start_child(?MODULE, {node_alive,
-                                               {node_alive, start_link, [Props]},
+                                               {node_alive, start_link, []},
                                                transient, infinity, worker,
                                                [node_alive]}),
     {ok, Sup}.
