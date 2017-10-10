@@ -1,8 +1,9 @@
-{application,node_alive,
-             [{description,[]},
-              {vsn,"1.0"},
-              {registered,[]},
-              {applications,[kernel,stdlib]},
-              {mod,{node_alive_app,[]}},
-              {env,[]},
-              {modules,[]}]}.
+{application,
+ node_alive,
+ [{description,[]},
+  {vsn,"2.0"},
+  {registered,[]},
+  {applications,[kernel,stdlib]},
+  {mod,{node_alive_app,[]}},
+  {env,[]},
+  {modules,[]}]}.

@@ -25,18 +25,20 @@
 -behaviour(gen_server).
 
 -define(TIMEOUT, 500).
+-define(HEARTBEAT_TIMEOUT, 5). %% 5秒
 
--define(HEARTBEAT_TIMEOUT, 20). %% 15秒
+-define(REDIS_HEARTBEAT(T), iolist_to_binary([<<"${node_alive}_heartbeat_">>, T])).
+-define(REDIS_REF(T),       iolist_to_binary([<<"${node_alive}_ref_">>, T])).
 
--define(REDIS_HEARTBEAT(T), iolist_to_binary([<<"$node_alive_heartbeat_">>, T])).
--define(REDIS_REF(T),       iolist_to_binary([<<"$node_alive_ref_">>, T])).
-
--define(LUA(HT, RT, Node),
-        iolist_to_binary(["if redis.pcall('ZREM', '", HT, "', '", Node, "') ~= 0 then
-                            return redis.pcall('INCR', '", RT, "')
+-define(REM_LUA(Table, NodeRef, DeadNode),
+        [<<"EVAL">>,
+         iolist_to_binary(["if redis.pcall('ZREM', KEYS[1], ARGV[1]) ~= 0 then
+                            return redis.pcall('INCR', KEYS[2])
                           else
                             return 'SKIP'
-                          end"])).
+                          end"]),
+         2,
+         Table, NodeRef, DeadNode]).
 
 -define(CATCH_RUN(X),
         case catch X of
@@ -113,8 +115,8 @@ to_binary(X) when is_binary(X)  -> X.
 do_init(#state{node = {NodeType, NodeID}} = State) ->
     Now = erlang:system_time(seconds),
     Table = ?REDIS_HEARTBEAT(NodeType),
-    {ok, [_, Ref]} = eredis_pool:transaction([[<<"ZADD">>, Table, to_binary(Now), NodeID],
-                                              [<<"INCR">>, ?REDIS_REF(NodeType)]]),
+    {ok, [_, Ref]} = eredis_cluster:transaction([[<<"ZADD">>, Table, to_binary(Now), NodeID],
+                                                 [<<"INCR">>, ?REDIS_REF(NodeType)]]),
     State#state{ref = Ref}.
 
 %%------------------------------------------------------------------------------
@@ -124,22 +126,22 @@ do_timeout(State) ->
         State1 = do_heartbeat(Now, State),
         do_check_dead(Now, State1), State1
     catch
-        E:R -> error_logger:error_msg("node_alive error ~p~n", [{E, R, erlang:get_stacktrace()}]), State
+        _:R -> error_logger:error_msg("node_alive error ~p~n", [{R, erlang:get_stacktrace()}]), State
     end.
 
 do_heartbeat(Now, #state{node = {NodeType, NodeID}} = State) ->
     Table = ?REDIS_HEARTBEAT(NodeType),
-    {ok, _} = eredis_pool:q([<<"ZADD">>, Table, to_binary(Now), NodeID]),
-    case eredis_pool:q([<<"GET">>, ?REDIS_REF(NodeType)]) of
+    {ok, _} = eredis_cluster:q([<<"ZADD">>, Table, to_binary(Now), NodeID]),
+    case eredis_cluster:q([<<"GET">>, ?REDIS_REF(NodeType)]) of
         {ok, Ref} when is_binary(Ref) -> State#state{ref = Ref};
         _ -> State
     end.
 
 do_check_dead(Now, #state{node = {NodeType, _NodeID}, heartbeat_time = HTime}) ->
     Table = ?REDIS_HEARTBEAT(NodeType),
-    case eredis_pool:q([<<"ZRANGEBYSCORE">>, Table, <<"0">>, to_binary(Now - HTime)]) of
+    case eredis_cluster:q([<<"ZRANGEBYSCORE">>, Table, <<"0">>, to_binary(Now - HTime)]) of
         {ok, [DeadNode | _]} ->
-            eredis_pool:q([<<"eval">>, ?LUA(Table, ?REDIS_REF(NodeType), DeadNode), <<"0">>]);
+            eredis_cluster:q(?REM_LUA(Table, ?REDIS_REF(NodeType), DeadNode));
         _ ->
             skip
     end.
@@ -147,5 +149,5 @@ do_check_dead(Now, #state{node = {NodeType, _NodeID}, heartbeat_time = HTime}) -
 %%------------------------------------------------------------------------------
 do_get_nodes(#state{node = {NodeType, _NodeID}}) ->
     Table = ?REDIS_HEARTBEAT(NodeType),
-    {ok, List} = eredis_pool:q([<<"ZRANGE">>, Table, <<"0">>, <<"-1">>]), {ok, List}.
+    {ok, List} = eredis_cluster:q([<<"ZRANGE">>, Table, <<"0">>, <<"-1">>]), {ok, List}.
 
