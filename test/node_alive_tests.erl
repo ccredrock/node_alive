@@ -2,12 +2,16 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(Setup, fun() -> application:start(node_alive) end).
--define(Clearnup, fun(_) -> application:stop(node_alive) end).
-
 basic_test_() ->
     {inorder,
-     {setup, ?Setup, ?Clearnup,
+     {setup,
+      fun() ->
+              node_alive:start()
+      end,
+      fun(_) ->
+              {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_heartbeat_test">>]),
+              {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_ref_test">>])
+      end,
       [{"redis",
         fun() ->
                 ?assertEqual(ok, element(1, hd(eredis_cluster:qa([<<"INFO">>])))),
@@ -16,24 +20,18 @@ basic_test_() ->
        {"node_dead",
         fun() ->
                 timer:sleep(500),
+                ?assertEqual(1, element(2, node_alive:get_ref())),
                 ?assertEqual(1, length(element(2, node_alive:get_nodes()))),
-                Now = erlang:system_time(seconds),
-                {ok, Ref} = node_alive:get_ref(),
-                LiveTime = integer_to_binary(Now),
-                DeadTime = integer_to_binary(Now - 21),
+                LiveTime = integer_to_binary(erlang:system_time(seconds)),
                 {ok, _} = eredis_cluster:q([<<"ZADD">>, <<"${node_alive}_heartbeat_test">>, LiveTime, <<"101">>]),
-                {ok, _} = eredis_cluster:q([<<"ZADD">>, <<"${node_alive}_heartbeat_test">>, DeadTime, <<"102">>]),
-                timer:sleep(1000),
-                ?assertNotEqual(Ref, element(2, node_alive:get_ref())),
-                ?assertEqual(2, length(element(2, node_alive:get_nodes())))
-        end},
-       {"clean",
-        fun() ->
-                {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_heartbeat_test">>]),
-                {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_ref_test">>]),
-                {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_over_test_100">>]),
-                {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_over_test_101">>]),
-                {ok, _} = eredis_cluster:q([<<"DEL">>, <<"${node_alive}_over_test_102">>])
+                timer:sleep(500),
+                ?assertEqual(2, element(2, node_alive:get_ref())),
+                ?assertEqual(2, length(element(2, node_alive:get_nodes()))),
+                DeadTime = integer_to_binary(erlang:system_time(seconds) - 21),
+                {ok, _} = eredis_cluster:q([<<"ZADD">>, <<"${node_alive}_heartbeat_test">>, DeadTime, <<"101">>]),
+                timer:sleep(500),
+                ?assertEqual(3, element(2, node_alive:get_ref())),
+                ?assertEqual(1, length(element(2, node_alive:get_nodes())))
         end}
       ]}
     }.

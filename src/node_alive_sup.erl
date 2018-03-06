@@ -1,15 +1,12 @@
 %%%-------------------------------------------------------------------
 %%% @author ccredrock@gmail.com
-%%% @copyright (C) 2017, <free>
-%%% @doc
-%%%
+%%% @copyright 2018 redrock
+%%% @doc redis node alive
 %%% @end
-%%% Created : 2017年07月07日12:11:03
 %%%-------------------------------------------------------------------
 -module(node_alive_sup).
 
--export([start_link/0]).
--export([init/1]).
+-export([start_link/0, init/1]).
 
 %%------------------------------------------------------------------------------
 -behaviour(supervisor).

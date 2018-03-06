@@ -1,10 +1,8 @@
 %%%-------------------------------------------------------------------
 %%% @author ccredrock@gmail.com
-%%% @copyright (C) 2017, <free>
-%%% @doc
-%%%
+%%% @copyright 2018 redrock
+%%% @doc redis node alive
 %%% @end
-%%% Created : 2017年07月07日12:10:04
 %%%-------------------------------------------------------------------
 -module(node_alive_app).
 
@@ -15,7 +13,6 @@
 
 %%------------------------------------------------------------------------------
 start(_StartType, _StartArgs) ->
-    application:ensure_started(eredis_cluster),
     node_alive_sup:start_link().
 
 stop(_State) ->
